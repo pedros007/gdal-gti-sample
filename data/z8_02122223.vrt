@@ -1,13 +1,13 @@
-<VRTDataset rasterXSize="2048" rasterYSize="2048">
+<VRTDataset rasterXSize="1024" rasterYSize="2048">
   <SRS dataAxisToSRSAxisMapping="2,1">EPSG:4326</SRS>
-  <GeoTransform>-112.5439453125, 0.000021457672120, 0.0, 38.056640625, 0.0, -0.000042915344240</GeoTransform>
+  <GeoTransform>-112.5439453125, 0.000042915344240, 0.0, 38.056640625, 0.0, -0.000042915344240</GeoTransform>
   <VRTRasterBand dataType="Byte" band="1" colorInterp="Red">
     <SimpleSource>
       <SourceFilename relativeToVRT="1">green.tif</SourceFilename>
       <SourceBand>1</SourceBand>
       <SourceProperties RasterXSize="2048" RasterYSize="2048" DataType="Byte" BlockXSize="256" BlockYSize="256" />
       <SrcRect xOff="0" yOff="0" xSize="2048" ySize="2048" />
-      <DstRect xOff="0" yOff="0" xSize="2048" ySize="2048" />
+      <DstRect xOff="0" yOff="0" xSize="1024" ySize="2048" />
     </SimpleSource>
   </VRTRasterBand>
   <VRTRasterBand dataType="Byte" band="2" colorInterp="Green">
@@ -16,7 +16,7 @@
       <SourceBand>2</SourceBand>
       <SourceProperties RasterXSize="2048" RasterYSize="2048" DataType="Byte" BlockXSize="256" BlockYSize="256" />
       <SrcRect xOff="0" yOff="0" xSize="2048" ySize="2048" />
-      <DstRect xOff="0" yOff="0" xSize="2048" ySize="2048" />
+      <DstRect xOff="0" yOff="0" xSize="1024" ySize="2048" />
     </SimpleSource>
   </VRTRasterBand>
   <VRTRasterBand dataType="Byte" band="3" colorInterp="Blue">
@@ -25,7 +25,7 @@
       <SourceBand>3</SourceBand>
       <SourceProperties RasterXSize="2048" RasterYSize="2048" DataType="Byte" BlockXSize="256" BlockYSize="256" />
       <SrcRect xOff="0" yOff="0" xSize="2048" ySize="2048" />
-      <DstRect xOff="0" yOff="0" xSize="2048" ySize="2048" />
+      <DstRect xOff="0" yOff="0" xSize="1024" ySize="2048" />
     </SimpleSource>
   </VRTRasterBand>
 </VRTDataset>
