@@ -18,6 +18,11 @@ The `data/` directory stores a few things:
   green, and far-out requests render blue.  z13 inline overviews are
   used for factors `2, 4, 8, 16` and GTI-backed overview datasets for
   z8 (`32, 64, 128`) and z4 (`256, 512, 1024`).
+- `sample_gti_z4_single.xml` demonstrates the same GTI structure with a
+  single full-extent z4 image, `z4_single.tif`, instead of a z4
+  GeoPackage GTI. The single-image branch is built with a deep internal
+  overview pyramid, but with the current GTI behavior it still does not
+  reach the final blue branch the same way `sample_gti.xml` does.
 
 ## Build The GTI GeoPackages
 
@@ -32,6 +37,8 @@ This creates:
 - `data/z13_gti.gpkg`
 - `data/z8_gti.gpkg`
 - `data/z4_gti.gpkg`
+- `data/z4_single.vrt`
+- `data/z4_single.tif`
 
 The script uses `gdal driver gti create --absolute-path` and pins all tile paths to a canonical absolute root at `/tmp/gdal-gti-sample`. It creates a symlink from that path to the repo so the generated GeoPackages can be committed with stable absolute paths and then reopened inside Docker by mounting the repo at the same location.
 
@@ -41,6 +48,19 @@ Equivalent classic GDAL tooling is:
 gdaltindex -overwrite -f GPKG -write_absolute_path data/z13_gti.gpkg /tmp/gdal-gti-sample/data/z13_*.vrt
 gdaltindex -overwrite -f GPKG -write_absolute_path data/z8_gti.gpkg /tmp/gdal-gti-sample/data/z8_*.vrt
 gdaltindex -overwrite -f GPKG -write_absolute_path data/z4_gti.gpkg /tmp/gdal-gti-sample/data/z4_*.vrt
+gdal_create -of GTiff -outsize 4096 4096 -bands 3 -burn 254 -burn 0 -burn 0 \
+  -co TILED=YES -co COMPRESS=JPEG -co INTERLEAVE=PIXEL data/red.tif
+gdal_create -of GTiff -outsize 4096 4096 -bands 3 -burn 0 -burn 255 -burn 1 \
+  -co TILED=YES -co COMPRESS=JPEG -co INTERLEAVE=PIXEL data/green.tif
+gdal_create -of GTiff -outsize 4096 4096 -bands 3 -burn 0 -burn 0 -burn 254 \
+  -co TILED=YES -co COMPRESS=JPEG -co INTERLEAVE=PIXEL data/blue.tif
+gdaladdo -r nearest -minsize 1 data/red.tif
+gdaladdo -r nearest -minsize 1 data/green.tif
+gdaladdo -r nearest -minsize 1 data/blue.tif
+gdalbuildvrt -overwrite data/z4_single.vrt data/z4_0212.vrt data/z4_0213.vrt
+gdal_translate -of GTiff -co TILED=YES -co COMPRESS=JPEG -co INTERLEAVE=PIXEL \
+  data/z4_single.vrt data/z4_single.tif
+gdaladdo -r nearest -minsize 1 data/z4_single.tif
 ```
 
 ## Use In Docker
@@ -55,38 +75,40 @@ docker run --rm -it \
   gdalinfo data/sample_gti.xml
 ```
 
-## Render 256x256 PNG Samples
+## Render Red, Green, And Blue Samples
 
-These examples force different overview levels while keeping the output images at 256x256:
+These examples read a `4096x4096` window and scale it down to different
+output sizes. With the scaled sample data, that now gives a convenient
+red / green / blue progression using `sample_gti.xml`:
 
 ```bash
 docker run --rm \
   -v "$PWD":/tmp/gdal-gti-sample \
   -w /tmp/gdal-gti-sample \
   ghcr.io/osgeo/gdal:ubuntu-full-3.12.2 \
-  gdal_translate -of PNG -ovr NONE -srcwin 0 0 256 256 -outsize 256 256 \
+  gdal_translate -of PNG -srcwin 0 0 4096 4096 -outsize 256 256 \
   data/sample_gti.xml /tmp/gdal-gti-sample/red_z13.png
 
 docker run --rm \
   -v "$PWD":/tmp/gdal-gti-sample \
   -w /tmp/gdal-gti-sample \
   ghcr.io/osgeo/gdal:ubuntu-full-3.12.2 \
-  gdal_translate -of PNG -ovr 4 -srcwin 0 0 256 256 -outsize 256 256 \
+  gdal_translate -of PNG -srcwin 0 0 4096 4096 -outsize 64 64 \
   data/sample_gti.xml /tmp/gdal-gti-sample/green_z8.png
 
 docker run --rm \
   -v "$PWD":/tmp/gdal-gti-sample \
   -w /tmp/gdal-gti-sample \
   ghcr.io/osgeo/gdal:ubuntu-full-3.12.2 \
-  gdal_translate -of PNG -ovr 5 -srcwin 0 0 256 256 -outsize 256 256 \
+  gdal_translate -of PNG -srcwin 0 0 4096 4096 -outsize 4 4 \
   data/sample_gti.xml /tmp/gdal-gti-sample/blue_z4.png
 ```
 
 Expected results:
 
 - `red_z13.png` renders from the full-resolution z13 tiles.
-- `green_z8.png` renders from the GTI overview dataset backed by `z8_gti.gpkg`.
-- `blue_z4.png` renders from the farthest concrete overview exposed by the chained GTI XML, backed by `z4_gti.gpkg`.
+- `green_z8.png` renders from the delegated green `z8_gti.gpkg` branch.
+- `blue_z4.png` renders from the delegated blue `z4_gti.gpkg` branch.
 
 ## Verify Source Overview Reuse
 
@@ -95,10 +117,12 @@ When the source tile is backed by data with internal overviews, GDAL GTI can sti
 For the first reduced-resolution copy of the full-resolution mosaic, `-ovr 0` means:
 
 - start from the z13 GTI layer,
-- request its first GTI overview level, which is `4096x4096 -> 2048x2048`,
+- request its first GTI overview level, which is `8192x8192 -> 4096x4096`,
 - then render a `256x256` output from that request.
 
-That is an 8x reduction relative to the underlying `2048x2048` z13 tile, so the best internal match in `red.tif` is its `512x512` overview.
+That is a 16x reduction relative to the underlying `4096x4096` z13 tile,
+so the best internal match in `red.tif` is one of its internal
+overviews, not the full-resolution source data.
 
 Run this exact proof step in Docker:
 
@@ -124,3 +148,41 @@ That output shows the GTI read path opening the internal overviews from `red.tif
 
 - GTI-level overview selection through `sample_gti.xml`
 - reuse of lower-level GeoTIFF overviews when the selected source data already has them
+
+## Single-Image z4 Variant
+
+`data/sample_gti_z4_single.xml` is an alternate GTI XML that keeps the
+same red full-resolution base but uses:
+
+- z13 inline overviews for the first reduced-resolution levels
+- `z8_gti.gpkg` for the first delegated green overview level
+- `z4_single.tif` for the coarse single-image branch
+
+This variant is intentionally simpler than `sample_gti.xml`: it is meant
+to demonstrate that the coarse branch can be a single raster image
+instead of a z4 GeoPackage GTI. With the current GTI behavior, it still
+returns red and green, but not the final blue handoff that the
+GeoPackage-backed `sample_gti.xml` reaches.
+
+- `data/z4_single.vrt` mosaics `z4_0212.vrt` and `z4_0213.vrt`
+- `data/z4_single.tif` stores the single merged z4 image as a tiled
+  GeoTIFF with a deliberately deep internal overview pyramid built by
+  `gdaladdo -minsize 1`
+- the coarse single-image branch still uses the same blue source data
+
+Inspect it with:
+
+```bash
+gdalinfo data/sample_gti_z4_single.xml
+```
+
+To probe that current behavior interactively, use:
+
+```bash
+docker run --rm \
+  -v "$PWD":/tmp/gdal-gti-sample \
+  -w /tmp/gdal-gti-sample \
+  ghcr.io/osgeo/gdal:ubuntu-full-3.12.2 \
+  gdal_translate -of PNG -srcwin 0 0 4096 4096 -outsize 4 4 \
+  data/sample_gti_z4_single.xml /tmp/gdal-gti-sample/z4_single_probe.png
+```
