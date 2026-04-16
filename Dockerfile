@@ -1,6 +1,6 @@
 FROM debian:trixie-slim
 
-ARG GDAL_VERSION=3.12.3
+ARG GDAL_COMMIT=de74003daf79aa943ad4a0cd3b349b9815edc78f
 
 WORKDIR /tmp/gdal-gti-sample
 
@@ -19,16 +19,17 @@ RUN apt-get update \
         pkg-config \
         postgresql-client \
         zlib1g-dev \
-    && curl -fsSL "https://download.osgeo.org/gdal/${GDAL_VERSION}/gdal-${GDAL_VERSION}.tar.gz" \
-        | tar -xzf - -C /tmp \
-    && mkdir -p "/tmp/gdal-${GDAL_VERSION}/build" \
-    && cd "/tmp/gdal-${GDAL_VERSION}/build" \
+    && mkdir -p /tmp/gdal-src \
+    && curl -fsSL "https://github.com/OSGeo/gdal/archive/${GDAL_COMMIT}.tar.gz" \
+        | tar -xzf - --strip-components=1 -C /tmp/gdal-src \
+    && mkdir -p /tmp/gdal-src/build \
+    && cd /tmp/gdal-src/build \
     && cmake .. \
     && make -j"$(nproc)" \
     && make install \
     && ldconfig \
     && gdalinfo --version \
     && psql --version \
-    && rm -rf "/tmp/gdal-${GDAL_VERSION}" \
+    && rm -rf /tmp/gdal-src \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*

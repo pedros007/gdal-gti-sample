@@ -1,20 +1,32 @@
 <GDALTileIndexDataset>
-    <IndexDataset>/tmp/gdal-gti-sample/data/z13_gti.gpkg</IndexDataset>
+    <IndexDataset>z13_gti.gpkg</IndexDataset>
 
     <Overview><Factor>2</Factor></Overview>
     <Overview><Factor>4</Factor></Overview>
     <Overview><Factor>8</Factor></Overview>
     <Overview><Factor>16</Factor></Overview>
     <Overview>
-      <Dataset>GTI:/tmp/gdal-gti-sample/data/z8_gti.gpkg</Dataset>
+      <Dataset>GTI:z8_gti.gpkg</Dataset>
       <Factor>32</Factor>
+    </Overview>
+    <Overview>
+      <Dataset>GTI:z8_gti.gpkg</Dataset>
       <Factor>64</Factor>
+    </Overview>
+    <Overview>
+      <Dataset>GTI:z8_gti.gpkg</Dataset>
       <Factor>128</Factor>
     </Overview>
     <Overview>
-      <Dataset>GTI:/tmp/gdal-gti-sample/data/z4_gti.gpkg</Dataset>
+      <Dataset>GTI:z4_gti.gpkg</Dataset>
       <Factor>256</Factor>
+    </Overview>
+    <Overview>
+      <Dataset>GTI:z4_gti.gpkg</Dataset>
       <Factor>512</Factor>
+    </Overview>
+    <Overview>
+      <Dataset>GTI:z4_gti.gpkg</Dataset>
       <Factor>1024</Factor>
     </Overview>
 </GDALTileIndexDataset>
