@@ -1,6 +1,6 @@
 FROM debian:trixie-slim
 
-ARG GDAL_COMMIT=de74003daf79aa943ad4a0cd3b349b9815edc78f
+ARG GDAL_COMMIT=9bfb1c4a56ace368c6af0159e35c5c6e2f76bce5
 
 WORKDIR /tmp/gdal-gti-sample
 
