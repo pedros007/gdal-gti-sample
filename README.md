@@ -5,6 +5,9 @@ This repo demonstrates some of the features of the [GDAL Raster Tile Index (GTI)
 - GDAL can build GeoPackage tile indexes  which happen to adhere to GTI
 - GTI XML can chain overviews to other GTI datasets, including "overviews of overviews".
 - GDAL can resolve reads to either internal GTiff overviews or external "overviews of overviews" specified as a different GTI
+- A per-dataset `GMF_PER_DATASET` NODATA mask band stored in an external
+  `.msk` sibling propagates through hand-written VRTs, `gdalbuildvrt`
+  output, `gdal_translate` output, and the GTI tile-index datasets.
 
 The `data/` directory stores a few things:
 
@@ -13,6 +16,14 @@ The `data/` directory stores a few things:
   - zoom 13 VRTs point to red imagery representing 2.385m pixels (full resolution).
   - zoom 8 VRTs point to green imagery representing 4.77m pixels
   - zoom 4 VRTs point to blue imagery representing 9.54m pixels
+- `red.tif.msk`, `green.tif.msk`, `blue.tif.msk` are external
+  `GMF_PER_DATASET` mask sidecars, rasterized from
+  `mask_star.geojson` (a five-pointed star centered on the 2048x2048
+  COG footprint). Values are `0` for nodata and `255` for valid, so
+  the mask carries one bit of information per pixel.
+- Each hand-written zoom VRT (`z13_*.vrt`, `z8_*.vrt`, `z4_*.vrt`)
+  carries a top-level `<MaskBand>` element that references the
+  source COG's mask via `<SourceBand>mask,1</SourceBand>`.
 - `sample_gti.xml` is a GTI XML demonstrating how overview delegation
   works: zoomed-in requests render red, intermediate requests render
   green, and far-out requests render blue.  z13 inline overviews are
@@ -39,6 +50,8 @@ This creates:
 - `data/z4_gti.gpkg`
 - `data/z4_single.vrt`
 - `data/z4_single.tif`
+- `data/mask_star.geojson`
+- `data/red.tif.msk`, `data/green.tif.msk`, `data/blue.tif.msk`
 
 The script uses `gdal driver gti create --absolute-path` and pins all tile paths to a canonical absolute root at `/tmp/gdal-gti-sample`. It creates a symlink from that path to the repo so the generated GeoPackages can be committed with stable absolute paths and then reopened inside Docker by mounting the repo at the same location.
 
@@ -61,6 +74,15 @@ gdalbuildvrt -overwrite data/z4_single.vrt data/z4_0212.vrt data/z4_0213.vrt
 gdal_translate -of GTiff -co TILED=YES -co COMPRESS=JPEG -co INTERLEAVE=PIXEL \
   data/z4_single.vrt data/z4_single.tif
 gdaladdo -r nearest -minsize 1 data/z4_single.tif
+gdal_rasterize -init 0 -burn 255 -ot Byte -te 0 0 2048 2048 -ts 2048 2048 \
+  -of GTiff data/mask_star.geojson /tmp/star_raw.tif
+for c in red green blue; do
+  gdal_translate -of GTiff \
+    -mo INTERNAL_MASK_FLAGS_1=2 -mo INTERNAL_MASK_FLAGS_2=2 -mo INTERNAL_MASK_FLAGS_3=2 \
+    -co COMPRESS=DEFLATE -co TILED=YES -co BLOCKXSIZE=512 -co BLOCKYSIZE=512 \
+    /tmp/star_raw.tif data/${c}.tif.msk
+  gdaladdo -r nearest data/${c}.tif.msk 2 4
+done
 ```
 
 ## Build And Use In Docker
@@ -156,6 +178,50 @@ That output shows the GTI read path opening the internal overviews from `red.tif
 
 - GTI-level overview selection through `sample_gti.xml`
 - reuse of lower-level GeoTIFF overviews when the selected source data already has them
+
+## Star NODATA Mask
+
+Each of `red.tif`, `green.tif`, and `blue.tif` has an external
+`GMF_PER_DATASET` mask band served as a sibling `.msk` TIFF. The mask
+is rasterized from `data/mask_star.geojson` (a centered five-point
+star) and stores only `0` (nodata) and `255` (valid), so it is
+semantically a 1-bit NODATA band while still rendering cleanly in
+consumers that treat a mask band as alpha without promotion (e.g.
+QGIS).
+
+The mask is exposed as a top-level `<MaskBand>` in every hand-written
+zoom VRT via `<SourceBand>mask,1</SourceBand>`. That makes it
+propagate through the rest of the stack automatically:
+
+- `data/z{4,8,13}_*.vrt` advertise `Mask Flags: PER_DATASET`.
+- `data/z4_single.vrt` (built by `gdalbuildvrt`) inherits the mask
+  from its inputs.
+- `data/z4_single.tif` (built by `gdal_translate`) gets an internal
+  TIFF mask subfile covering the full overview pyramid.
+- `data/z{4,8,13}_gti.gpkg` and `data/sample_gti*.xml` aggregate the
+  source masks through the GTI driver.
+
+Confirm the chain locally with:
+
+```bash
+gdalinfo data/red.tif          | grep -E "^  Mask Flags"
+gdalinfo data/z13_0212222222220.vrt | grep -E "^  Mask Flags"
+gdalinfo data/z4_single.tif    | grep -E "^  Mask Flags"
+gdalinfo GTI:data/z13_gti.gpkg | grep -E "^  Mask Flags"
+```
+
+Render the star through the top-level GTI to see the mask cut out
+the background (requires `gdalwarp` so the mask is promoted to a
+proper 0-255 alpha channel):
+
+```bash
+docker run --rm \
+  -v "$PWD":/tmp/gdal-gti-sample \
+  -w /tmp/gdal-gti-sample \
+  gdal-gti-sample:4bf06c5 \
+  gdalwarp -overwrite -dstalpha -ts 512 512 \
+  data/sample_gti.xml star_red.png
+```
 
 ## Single-Image z4 Variant
 

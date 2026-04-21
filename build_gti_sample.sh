@@ -46,6 +46,71 @@ build_index() {
     "${DATA_DIR}/${output}"
 }
 
+build_masks() {
+  local geojson="${DATA_DIR}/mask_star.geojson"
+  local raw="${DATA_DIR}/.mask_star_raw.tif"
+
+  echo "Generating ${geojson}"
+  python3 - "${geojson}" <<'PY'
+import json, math, sys
+cx, cy = 1024.0, 1024.0
+R_outer, R_inner = 800.0, 320.0
+points = []
+for k in range(10):
+    theta = 2 * math.pi * k / 10
+    rad = R_outer if k % 2 == 0 else R_inner
+    points.append([cx + rad * math.sin(theta), cy + rad * math.cos(theta)])
+points.append(points[0])
+fc = {
+    "type": "FeatureCollection",
+    "features": [
+        {
+            "type": "Feature",
+            "properties": {"name": "star"},
+            "geometry": {"type": "Polygon", "coordinates": [points]},
+        }
+    ],
+}
+with open(sys.argv[1], "w") as f:
+    json.dump(fc, f, indent=2)
+    f.write("\n")
+PY
+
+  rm -f "${raw}"
+  gdal_rasterize -q -init 0 -burn 255 -ot Byte \
+    -te 0 0 2048 2048 -ts 2048 2048 \
+    -of GTiff \
+    "${geojson}" "${raw}"
+
+  for color in red green blue; do
+    local main="${DATA_DIR}/${color}.tif"
+    local msk="${main}.msk"
+
+    echo "Building ${msk}"
+    rm -f "${msk}" "${msk}.ovr" "${msk}.aux.xml"
+
+    # Strip the WGS84 CRS + Y-up geotransform that gdal_rasterize
+    # inherits from the GeoJSON, and emit the mask in the same bare
+    # pixel space as red/green/blue.tif (no CRS, origin (0,0), Y-down)
+    # so QGIS overlays the two layers on the same map extent.
+    gdal_translate -q \
+      -of GTiff \
+      -a_srs "none" \
+      -a_ullr 0 0 2048 2048 \
+      -mo INTERNAL_MASK_FLAGS_1=2 \
+      -mo INTERNAL_MASK_FLAGS_2=2 \
+      -mo INTERNAL_MASK_FLAGS_3=2 \
+      -co COMPRESS=DEFLATE \
+      -co TILED=YES -co BLOCKXSIZE=512 -co BLOCKYSIZE=512 \
+      "${raw}" "${msk}"
+
+    gdaladdo -q -r nearest "${msk}" 2 4
+    rm -f "${msk}.aux.xml"
+  done
+
+  rm -f "${raw}"
+}
+
 ensure_canonical_root
 
 # Equivalent classic syntax for one index:
@@ -83,6 +148,8 @@ echo "Building deep internal overviews for z4_single.tif"
 gdaladdo -r nearest -minsize 1 \
   "${DATA_DIR}/z4_single.tif"
 
+build_masks
+
 cat <<EOF
 Built GTI sample data:
   ${DATA_DIR}/z13_gti.gpkg
@@ -90,6 +157,10 @@ Built GTI sample data:
   ${DATA_DIR}/z4_gti.gpkg
   ${DATA_DIR}/z4_single.vrt
   ${DATA_DIR}/z4_single.tif
+  ${DATA_DIR}/mask_star.geojson
+  ${DATA_DIR}/red.tif.msk
+  ${DATA_DIR}/green.tif.msk
+  ${DATA_DIR}/blue.tif.msk
 
 Canonical absolute path root:
   ${CANONICAL_ROOT}
