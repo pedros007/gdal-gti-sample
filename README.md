@@ -21,8 +21,8 @@ The `data/` directory stores a few things:
 - `sample_gti_z4_single.xml` demonstrates the same GTI structure with a
   single full-extent z4 image, `z4_single.tif`, instead of a z4
   GeoPackage GTI. The single-image branch is built with a deep internal
-  overview pyramid, but with the current GTI behavior it still does not
-  reach the final blue branch the same way `sample_gti.xml` does.
+  overview pyramid and, with recent GDAL fixes, now follows the same
+  red / green / blue progression as `sample_gti.xml`.
 
 ## Build The GTI GeoPackages
 
@@ -63,45 +63,53 @@ gdal_translate -of GTiff -co TILED=YES -co COMPRESS=JPEG -co INTERLEAVE=PIXEL \
 gdaladdo -r nearest -minsize 1 data/z4_single.tif
 ```
 
-## Use In Docker
+## Build And Use In Docker
 
-This repo documents and verifies the sample against the official GDAL docker image. Mount this repo at the same canonical path used inside the committed XML and GeoPackages:
+Build the local Docker image from this repo's `Dockerfile`. The
+examples below use GDAL commit `4bf06c5`, which as of this writing
+corresponds to `v3.13.0 beta`:
+
+```bash
+docker build --build-arg GDAL_COMMIT=4bf06c5 --progress plain -t gdal-gti-sample:4bf06c5 .
+```
+
+Then mount this repo at the same canonical path used inside the
+committed XML and GeoPackages:
 
 ```bash
 docker run --rm -it \
   -v "$PWD":/tmp/gdal-gti-sample \
   -w /tmp/gdal-gti-sample \
-  ghcr.io/osgeo/gdal:ubuntu-full-3.12.2 \
+  gdal-gti-sample:4bf06c5 \
   gdalinfo data/sample_gti.xml
 ```
 
 ## Render Red, Green, And Blue Samples
 
-These examples read a `4096x4096` window and scale it down to different
-output sizes. With the scaled sample data, that now gives a convenient
-red / green / blue progression using `sample_gti.xml`:
+These examples use the locally built Docker image and exercise requests
+that select the red, green, and blue branches from `sample_gti.xml`:
 
 ```bash
 docker run --rm \
   -v "$PWD":/tmp/gdal-gti-sample \
   -w /tmp/gdal-gti-sample \
-  ghcr.io/osgeo/gdal:ubuntu-full-3.12.2 \
-  gdal_translate -of PNG -srcwin 0 0 4096 4096 -outsize 256 256 \
-  data/sample_gti.xml /tmp/gdal-gti-sample/red_z13.png
+  gdal-gti-sample:4bf06c5 \
+  gdal_translate -of PNG -srcwin 0 0 4096 4096 -outsize 4096 4096 \
+  data/sample_gti.xml red_z13.png
 
 docker run --rm \
   -v "$PWD":/tmp/gdal-gti-sample \
   -w /tmp/gdal-gti-sample \
-  ghcr.io/osgeo/gdal:ubuntu-full-3.12.2 \
-  gdal_translate -of PNG -srcwin 0 0 4096 4096 -outsize 64 64 \
-  data/sample_gti.xml /tmp/gdal-gti-sample/green_z8.png
+  gdal-gti-sample:4bf06c5 \
+  gdal_translate -of PNG -srcwin 0 0 65536 65536 -outsize 1024 1024 \
+  data/sample_gti.xml green_z8.png
 
 docker run --rm \
   -v "$PWD":/tmp/gdal-gti-sample \
   -w /tmp/gdal-gti-sample \
-  ghcr.io/osgeo/gdal:ubuntu-full-3.12.2 \
-  gdal_translate -of PNG -srcwin 0 0 4096 4096 -outsize 4 4 \
-  data/sample_gti.xml /tmp/gdal-gti-sample/blue_z4.png
+  gdal-gti-sample:4bf06c5 \
+  gdal_translate -of PNG -srcwin 0 0 65535 65535 -outsize 4 4 \
+  data/sample_gti.xml blue_z4.png
 ```
 
 Expected results:
@@ -131,7 +139,7 @@ docker run --rm \
   -e CPL_DEBUG=GTiff,VRT,GTI \
   -v "$PWD":/tmp/gdal-gti-sample \
   -w /tmp/gdal-gti-sample \
-  ghcr.io/osgeo/gdal:ubuntu-full-3.12.2 \
+  gdal-gti-sample:4bf06c5 \
   gdal_translate -of PNG -ovr 0 -srcwin 0 0 256 256 -outsize 256 256 \
   data/sample_gti.xml /vsimem/ovr0.png
 ```
@@ -160,9 +168,9 @@ same red full-resolution base but uses:
 
 This variant is intentionally simpler than `sample_gti.xml`: it is meant
 to demonstrate that the coarse branch can be a single raster image
-instead of a z4 GeoPackage GTI. With the current GTI behavior, it still
-returns red and green, but not the final blue handoff that the
-GeoPackage-backed `sample_gti.xml` reaches.
+instead of a z4 GeoPackage GTI. With recent GDAL fixes, it now reaches
+the same red / green / blue progression as the GeoPackage-backed
+`sample_gti.xml`.
 
 - `data/z4_single.vrt` mosaics `z4_0212.vrt` and `z4_0213.vrt`
 - `data/z4_single.tif` stores the single merged z4 image as a tiled
@@ -176,13 +184,28 @@ Inspect it with:
 gdalinfo data/sample_gti_z4_single.xml
 ```
 
-To probe that current behavior interactively, use:
+To render the same three branch-selection probes against the
+single-image variant, use:
 
 ```bash
 docker run --rm \
   -v "$PWD":/tmp/gdal-gti-sample \
   -w /tmp/gdal-gti-sample \
-  ghcr.io/osgeo/gdal:ubuntu-full-3.12.2 \
-  gdal_translate -of PNG -srcwin 0 0 4096 4096 -outsize 4 4 \
-  data/sample_gti_z4_single.xml /tmp/gdal-gti-sample/z4_single_probe.png
+  gdal-gti-sample:4bf06c5 \
+  gdal_translate -of PNG -srcwin 0 0 4096 4096 -outsize 4096 4096 \
+  data/sample_gti_z4_single.xml z4_single_red.png
+
+docker run --rm \
+  -v "$PWD":/tmp/gdal-gti-sample \
+  -w /tmp/gdal-gti-sample \
+  gdal-gti-sample:4bf06c5 \
+  gdal_translate -of PNG -srcwin 0 0 65536 65536 -outsize 1024 1024 \
+  data/sample_gti_z4_single.xml z4_single_green.png
+
+docker run --rm \
+  -v "$PWD":/tmp/gdal-gti-sample \
+  -w /tmp/gdal-gti-sample \
+  gdal-gti-sample:4bf06c5 \
+  gdal_translate -of PNG -srcwin 0 0 65535 65535 -outsize 4 4 \
+  data/sample_gti_z4_single.xml z4_single_blue.png
 ```

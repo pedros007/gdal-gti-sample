@@ -1,11 +1,12 @@
 FROM debian:trixie-slim
 
-ARG GDAL_COMMIT=9bfb1c4a56ace368c6af0159e35c5c6e2f76bce5
+ARG GDAL_COMMIT=4bf06c5
 
 WORKDIR /tmp/gdal-gti-sample
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
+        awscli \
         build-essential \
         ca-certificates \
         cmake \

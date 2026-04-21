@@ -1,10 +1,11 @@
 <GDALTileIndexDataset>
-    <IndexDataset>z13_gti.gpkg</IndexDataset>
+    <IndexDataset>GTI:z13_gti.gpkg</IndexDataset>
 
     <Overview><Factor>2</Factor></Overview>
     <Overview><Factor>4</Factor></Overview>
     <Overview><Factor>8</Factor></Overview>
     <Overview><Factor>16</Factor></Overview>
+
     <Overview>
       <Dataset>GTI:z8_gti.gpkg</Dataset>
       <Factor>32</Factor>
@@ -17,6 +18,7 @@
       <Dataset>GTI:z8_gti.gpkg</Dataset>
       <Factor>128</Factor>
     </Overview>
+
     <Overview>
       <Dataset>GTI:z4_gti.gpkg</Dataset>
       <Factor>256</Factor>
